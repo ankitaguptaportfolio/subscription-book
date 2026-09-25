@@ -160,6 +160,24 @@
   }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
+  /* ---------- Page nav ---------- */
+  .page-nav{ background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:40; }
+  .page-nav-inner{ max-width:1180px; margin:0 auto; padding:0 24px; display:flex; gap:4px; }
+  .page-tab{
+    background:none; border:none; cursor:pointer; padding:14px 18px 12px; font-size:13.5px; font-weight:600;
+    color:var(--ink-muted); border-bottom:2px solid transparent; font-family:inherit;
+  }
+  .page-tab:hover{ color:var(--ink); }
+  .page-tab.active{ color:var(--ink); border-bottom-color:var(--accent); }
+  .csv-btn{
+    display:inline-flex; align-items:center; gap:7px; cursor:pointer; background:var(--accent); color:var(--accent-ink);
+    border:none; padding:8px 15px; border-radius:9px; font-size:12.5px; font-weight:600; letter-spacing:.02em;
+  }
+  .csv-btn:hover{ filter:brightness(1.06); }
+  .csv-btn:active{ transform:translateY(1px); }
+  #analysisTable{ min-width:2500px; }
+  #analysisTable thead th{ cursor:default; }
+
   /* ---------- Sections ---------- */
   section{ margin-top:44px; }
   .section-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
@@ -322,7 +340,14 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<div class="wrap">
+<div class="page-nav">
+  <div class="page-nav-inner">
+    <button class="page-tab active" data-page="screener" type="button">Screener</button>
+    <button class="page-tab" data-page="analysis" type="button">Analysis</button>
+  </div>
+</div>
+
+<div class="wrap" id="page-screener">
 
   <section id="chartSection">
     <div class="section-head">
@@ -450,6 +475,62 @@
   </div>
 
   <footer>Built as an analyst desk aid — refreshed daily, Asia/Kolkata. Not a broker, not SEBI‑registered research.</footer>
+</div>
+
+<div class="wrap" id="page-analysis" hidden>
+  <section style="margin-top:36px;">
+    <div class="section-head">
+      <div>
+        <h2 id="analysisHeading">Analysis — full IPO register</h2>
+        <div class="desc">Every issue this book has ever tracked — open, pending, or already listed — with the full set of deal terms, financials, demand and scoring parameters in one place. Nothing drops off this list once an issue closes or lists; it accumulates across the year.</div>
+      </div>
+      <button class="csv-btn" id="csvBtn" type="button"><span>⬇</span> Download CSV</button>
+    </div>
+    <div class="table-scroll">
+      <table id="analysisTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Issue</th>
+            <th>Sector</th>
+            <th>Status</th>
+            <th>Open</th>
+            <th>Close</th>
+            <th>Listing</th>
+            <th style="text-align:right">Band low (₹)</th>
+            <th style="text-align:right">Band high (₹)</th>
+            <th style="text-align:right">Issue size (₹cr)</th>
+            <th style="text-align:right">Fresh (₹cr)</th>
+            <th style="text-align:right">OFS (₹cr)</th>
+            <th style="text-align:right">Lot size</th>
+            <th style="text-align:right">Min. inv. (₹)</th>
+            <th style="text-align:right">Revenue FY24 (₹cr)</th>
+            <th style="text-align:right">Revenue FY25 (₹cr)</th>
+            <th style="text-align:right">Revenue FY26 (₹cr)</th>
+            <th style="text-align:right">PAT FY24 (₹cr)</th>
+            <th style="text-align:right">PAT FY25 (₹cr)</th>
+            <th style="text-align:right">PAT FY26 (₹cr)</th>
+            <th style="text-align:right">P/E</th>
+            <th style="text-align:right">Sector P/E</th>
+            <th style="text-align:right">ROCE</th>
+            <th style="text-align:right">ROE</th>
+            <th style="text-align:right">Sub. overall</th>
+            <th style="text-align:right">Sub. QIB</th>
+            <th style="text-align:right">Sub. NII</th>
+            <th style="text-align:right">Sub. retail</th>
+            <th style="text-align:right">GMP (₹)</th>
+            <th style="text-align:right">GMP (%)</th>
+            <th style="text-align:right">Realized gain</th>
+            <th style="text-align:right">Promoter post-issue</th>
+            <th style="text-align:right">Score</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody id="analysisTableBody"></tbody>
+      </table>
+    </div>
+    <div class="note" style="margin-top:10px;">Financials, subscription and GMP figures are as reported in the RHP / exchange filings and financial‑media coverage as of the latest snapshot; issues still in their bidding window will keep moving until close. The CSV export mirrors this table's columns as raw numbers for use in a spreadsheet.</div>
+  </section>
 </div>
 
 <script>
@@ -1149,6 +1230,8 @@
   function fmtCr(n){ if(n==null) return "—"; return "₹" + n.toLocaleString('en-IN', {maximumFractionDigits:0}); }
   function fmtPe(n){ return n==null ? "n/a (loss)" : n.toFixed(1)+"x"; }
   function fmtSub(n){ return n==null ? "—" : n.toFixed(2)+"x"; }
+  function fmtSigned(n){ if(n==null) return "—"; return n<0 ? "−"+fmtCr(Math.abs(n)) : fmtCr(n); }
+  function fmtPct(n){ return n==null ? "—" : n+"%"; }
 
   function composite(ipo){
     let sum=0, wsum=0;
@@ -1462,6 +1545,142 @@
       bindTableSort('pastIpoTable', sortState.past, renderPastTable);
     }
   }
+
+  // ---------------------------------------------------------------------
+  // Render: Analysis page — full register, every issue, all parameters.
+  // Intentionally lists ALL of IPOS (open + past) rather than filtering,
+  // so this list only ever grows across the year and nothing is omitted
+  // once an issue moves from "open" to "past".
+  // ---------------------------------------------------------------------
+  function renderAnalysisTable(){
+    const rows = IPOS.map(i=>{
+      const score = composite(i);
+      const verdict = verdictFor(score);
+      return {ipo:i, score, verdict};
+    });
+    const body = document.getElementById('analysisTableBody');
+    body.innerHTML = rows.map((r,idx)=>{
+      const i = r.ipo;
+      const st = STATUS_META[i.status];
+      return `
+      <tr>
+        <td class="rank">${idx+1}</td>
+        <td><span class="co">${i.name}</span></td>
+        <td style="font-size:12.5px;color:var(--ink-2)">${i.sector}</td>
+        <td><span class="status-pill ${st.cls}">${i.statusLabel}</span></td>
+        <td class="mono">${i.open}</td>
+        <td class="mono">${i.close}</td>
+        <td class="mono">${i.listing}</td>
+        <td class="num mono">${i.bandLow}</td>
+        <td class="num mono">${i.bandHigh}</td>
+        <td class="num mono">${fmtCr(i.issueSize)}</td>
+        <td class="num mono">${fmtCr(i.fresh)}</td>
+        <td class="num mono">${fmtCr(i.ofs)}</td>
+        <td class="num mono">${i.lot}</td>
+        <td class="num mono">${fmtCr(i.minInv)}</td>
+        <td class="num mono">${fmtCr(i.revenue.fy24)}</td>
+        <td class="num mono">${fmtCr(i.revenue.fy25)}</td>
+        <td class="num mono">${fmtCr(i.revenue.fy26)}</td>
+        <td class="num mono">${fmtSigned(i.pat.fy24)}</td>
+        <td class="num mono">${fmtSigned(i.pat.fy25)}</td>
+        <td class="num mono">${fmtSigned(i.pat.fy26)}</td>
+        <td class="num mono">${fmtPe(i.pe)}</td>
+        <td class="num mono">${i.sectorPe? i.sectorPe+'x':'n/a'}</td>
+        <td class="num mono">${fmtPct(i.roce)}</td>
+        <td class="num mono">${fmtPct(i.roe)}</td>
+        <td class="num mono">${fmtSub(i.subOverall)}</td>
+        <td class="num mono">${fmtSub(i.subQIB)}</td>
+        <td class="num mono">${fmtSub(i.subNII)}</td>
+        <td class="num mono">${fmtSub(i.subRetail)}</td>
+        <td class="num mono">${i.gmpRs!=null? '₹'+i.gmpRs : '—'}</td>
+        <td class="num mono">${fmtPct(i.gmpPct)}</td>
+        <td class="num mono">${i.realized!=null ? (i.realized>=0?'+':'')+i.realized+'%' : '—'}</td>
+        <td class="num mono">${fmtPct(i.promoterPost)}</td>
+        <td class="num mono" style="font-weight:600">${r.score.toFixed(0)}</td>
+        <td><span class="verdict-pill ${r.verdict.cls}">${r.verdict.label}</span></td>
+      </tr>`;
+    }).join('');
+    const heading = document.getElementById('analysisHeading');
+    if(heading) heading.textContent = `Analysis — full IPO register (${rows.length})`;
+  }
+
+  // ---------------------------------------------------------------------
+  // CSV export — mirrors the Analysis table, raw numeric values (no ₹/%
+  // symbols) so it drops cleanly into a spreadsheet.
+  // ---------------------------------------------------------------------
+  function csvCell(v){
+    if(v==null) return '';
+    const s = String(v);
+    return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+  }
+  function buildCsv(){
+    const headers = ["ID","Name","Sector","Status","Status label","Open date","Close date","Listing date",
+      "Band low (Rs)","Band high (Rs)","Issue size (Rs cr)","Fresh (Rs cr)","OFS (Rs cr)","Lot size","Min investment (Rs)",
+      "Revenue FY24 (Rs cr)","Revenue FY25 (Rs cr)","Revenue FY26 (Rs cr)","PAT FY24 (Rs cr)","PAT FY25 (Rs cr)","PAT FY26 (Rs cr)",
+      "P/E","Sector P/E","ROCE (%)","ROE (%)","Sub overall (x)","Sub QIB (x)","Sub NII (x)","Sub retail (x)",
+      "GMP (Rs)","GMP (%)","Realized listing gain (%)","Promoter holding post-issue (%)","Composite score","Verdict"];
+    const rows = IPOS.map(i=>{
+      const score = composite(i);
+      const verdict = verdictFor(score).label;
+      return [i.id, i.name, i.sector, i.status, i.statusLabel, i.open, i.close, i.listing,
+        i.bandLow, i.bandHigh, i.issueSize, i.fresh, i.ofs, i.lot, i.minInv,
+        i.revenue.fy24, i.revenue.fy25, i.revenue.fy26, i.pat.fy24, i.pat.fy25, i.pat.fy26,
+        i.pe, i.sectorPe, i.roce, i.roe, i.subOverall, i.subQIB, i.subNII, i.subRetail,
+        i.gmpRs, i.gmpPct, i.realized, i.promoterPost, score.toFixed(1), verdict];
+    });
+    return '﻿' + [headers, ...rows].map(r=>r.map(csvCell).join(',')).join('\r\n');
+  }
+
+  // Two save paths: inside the Claude Artifact viewer, frame code can't
+  // trigger a direct browser download — the `downloads` capability is the
+  // only way to hand the viewer a file, and it shows its own confirmation.
+  // On a plain host (Vercel mirror, GitHub Pages) window.claude doesn't
+  // exist, so fall back to an ordinary Blob + <a download> save.
+  async function downloadCsv(){
+    const csv = buildCsv();
+    const filename = `subscription-book-analysis-${new Date().toISOString().slice(0,10)}.csv`;
+    if(window.claude && typeof window.claude.use === "function"){
+      try{
+        const downloads = await window.claude.use("downloads");
+        if(downloads){
+          await downloads.save({filename, data:new Blob([csv], {type:'text/csv;charset=utf-8;'})});
+          return;
+        }
+      } catch(e){
+        if(e && e.code === "declined") return; // viewer said no — don't fall back
+        // any other outcome (unavailable, not_granted, etc.) — fall through to the plain-browser save below
+      }
+    }
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ---------------------------------------------------------------------
+  // Page nav — Screener / Analysis
+  // ---------------------------------------------------------------------
+  let analysisRendered = false;
+  document.querySelectorAll('.page-tab').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.page-tab').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const page = btn.dataset.page;
+      document.getElementById('page-screener').hidden = page !== 'screener';
+      document.getElementById('page-analysis').hidden = page !== 'analysis';
+      if(page === 'analysis' && !analysisRendered){
+        renderAnalysisTable();
+        analysisRendered = true;
+      }
+    });
+  });
+  const csvBtn = document.getElementById('csvBtn');
+  if(csvBtn) csvBtn.addEventListener('click', downloadCsv);
 
   // ---------------------------------------------------------------------
   // Init
